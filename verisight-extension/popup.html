@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>VeriSight</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <header class="header">
+        <div class="logo">VeriSight</div>
+        <div class="subtitle">YouTube context + transcript</div>
+    </header>
+
+    <main>
+        <button id="analyzeBtn">Analyze this video</button>
+
+        <div id="status" class="status"></div>
+
+        <section class="card">
+            <h3>Video</h3>
+            <div class="kv"><span class="k">Title</span><span id="title" class="v">—</span></div>
+            <div class="kv"><span class="k">URL</span><span id="url" class="v">—</span></div>
+        </section>
+
+        <section class="card">
+            <h3>Transcript (if available)</h3>
+            <div class="hint">
+                Tip: On YouTube, open transcript first (⋯ → <b>Show transcript</b>), then click Analyze.
+            </div>
+            <pre id="transcript" class="transcript">—</pre>
+        </section>
+    </main>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>

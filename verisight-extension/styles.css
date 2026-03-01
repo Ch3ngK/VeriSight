@@ -1,0 +1,94 @@
+:root {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+body {
+    margin: 0;
+    width: 360px;
+    padding: 12px;
+    background: #0b0f14;
+    color: #e6edf3;
+}
+
+.header {
+    margin-bottom: 10px;
+}
+
+.logo {
+    font-weight: 800;
+    font-size: 18px;
+}
+
+.subtitle {
+    opacity: 0.8;
+    font-size: 12px;
+}
+
+button {
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 10px;
+    background: #2f81f7;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.status {
+    margin: 10px 0;
+    font-size: 12px;
+    opacity: 0.85;
+    min-height: 16px;
+}
+
+.card {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #111826;
+    border: 1px solid #223044;
+}
+
+.card h3 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+}
+
+.kv {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 12px;
+}
+
+.k {
+    opacity: 0.8;
+}
+
+.v {
+    word-break: break-word;
+}
+
+.hint {
+    font-size: 12px;
+    opacity: 0.85;
+    margin-bottom: 8px;
+}
+
+.transcript {
+    max-height: 180px;
+    overflow: auto;
+    padding: 8px;
+    border-radius: 10px;
+    background: #0b0f14;
+    border: 1px solid #223044;
+    white-space: pre-wrap;
+    font-size: 12px;
+}
