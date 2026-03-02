@@ -10,13 +10,14 @@ import { enrichWithAIDetection } from "../../../lib/aiTextDetection";
 import { enrichWithDeepfakeDetection } from "../../../lib/deepfakeDetection";
 import { enrichWithFactChecking } from "../../../lib/factCheckIntegration";
 import { enrichWithReverseImageSearch } from "../../../lib/reverseImageSearch";
+import { enrichWithStatisticalValidation } from "../../../lib/statisticalValidator";
 import { analyzeImageWithOpenAI } from "../../../lib/openaiVision"; // Added for OpenAI vision
 import axios from "axios"; // For fetching image URLs
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "content-type",
+  "Access-Control-Allow-Headers": "*",
 };
 
 export async function OPTIONS() {
@@ -188,6 +189,8 @@ export async function POST(req: Request) {
     const title = (body.title || "Untitled") as string;
     const url = (body.url || "") as string;
     const transcript = ((body.transcript || "") as string).slice(0, 12000);
+    console.log("[analyze] transcript length:", transcript.length);
+    console.log("[analyze] transcript preview:", transcript.slice(0, 80));
     const selectedText = ((body.selectedText || "") as string).slice(0, 5000);
 
     // Log incoming request for debugging
@@ -466,9 +469,11 @@ export async function POST(req: Request) {
       );
     }
 
-    if (process.env.ENABLE_FACT_CHECK === "true" && transcript) {
+    const factText = (transcript || selectedText || "").trim();
+
+    if (process.env.ENABLE_FACT_CHECK === "true" && factText) {
       enhancementPromises.push(
-        enrichWithFactChecking(response, transcript).then(r => ({ type: "fact_check", data: r }))
+        enrichWithFactChecking(response, factText).then(r => ({ type: "fact_check", data: r }))
       );
     }
 

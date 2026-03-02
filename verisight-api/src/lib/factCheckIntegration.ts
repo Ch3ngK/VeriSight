@@ -51,6 +51,25 @@ function extractClaimsFromTranscript(transcript: string): string[] {
   return [...new Set(claims)].slice(0, 10);
 }
 
+function simplifyForFactCheckQuery(text: string) {
+  const cleaned = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const stop = new Set([
+    "the","a","an","and","or","but","so","to","of","in","on","at","for","with",
+    "is","are","was","were","be","been","being","it","this","that","these","those",
+    "i","you","we","they","he","she","said","says","reported","announced","confirmed"
+  ]);
+
+  const words = cleaned.split(" ").filter(w => w.length > 2 && !stop.has(w));
+
+  return words.slice(0, 8).join(" ");
+}
+
+
 /**
  * Query Google Fact Check API
  * Note: Requires API key
@@ -64,37 +83,42 @@ async function queryGoogleFactCheck(
       return null;
     }
 
-    const response = await fetch(
-      `https://factcheckapi.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(claim)}&key=${apiKey}`,
-      {
-        headers: {
-          "User-Agent": "(VeriSight Public Safety, contact@example.com)",
-        },
-        timeout: 5000,
-      } as any
-    );
+    const queries = [claim, simplifyForFactCheckQuery(claim)].filter(Boolean);
 
-    if (!response.ok) return null;
+    for (const q of queries) {
+      const response = await fetch(
+        `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(q)}&key=${apiKey}`,
+        {
+          headers: {
+            "User-Agent": "(VeriSight Public Safety)",
+          },
+        } as any
+      );
 
-    const data = await response.json();
-    if (!data.claims || data.claims.length === 0) return null;
+      if (!response.ok) continue;
 
-    const topClaim = data.claims[0];
-    const review = topClaim.claimReview[0];
+      const data = await response.json();
+      if (!data.claims || data.claims.length === 0) continue;
 
-    return {
-      claim: topClaim.text,
-      status: mapGoogleRating(review.textualRating),
-      rating: review.textualRating,
-      source: review.publisher.name,
-      url: review.url,
-    };
+      const topClaim = data.claims[0];
+      const review = topClaim.claimReview?.[0];
+      if (!review) continue;
+
+      return {
+        claim: topClaim.text,
+        status: mapGoogleRating(review.textualRating),
+        rating: review.textualRating,
+        source: review.publisher?.name || "Unknown",
+        url: review.url || "",
+      };
+    }
+
+    return null;
   } catch (err) {
     console.warn("[GoogleFactCheck] API query failed:", err);
     return null;
   }
 }
-
 /**
  * Map Google's rating to our standard
  */
@@ -123,7 +147,6 @@ function mapGoogleRating(
 
   return "unverified";
 }
-
 /**
  * Query Snopes (mock implementation)
  * Real integration requires web scraping or Snopes API
