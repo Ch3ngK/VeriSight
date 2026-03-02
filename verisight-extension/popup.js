@@ -184,6 +184,7 @@ analyzeBtn.addEventListener("click", async () => {
       });
       if (!res.ok) throw new Error("Backend error");
       analysis = await res.json();
+      console.log("API RESPONSE:", analysis);
       await flushPending();
     } catch {
       await savePending(payload);
@@ -192,6 +193,17 @@ analyzeBtn.addEventListener("click", async () => {
 
 
     /* ---------- 5. Render Results ---------- */
+
+    // Safe extraction of key fields with validation
+    const overviewText = typeof analysis.summary === "string" && analysis.summary.trim() 
+      ? analysis.summary 
+      : "Overview unavailable";
+    const enhancedText = typeof analysis.enhanced_analysis === "string" && analysis.enhanced_analysis.trim() 
+      ? analysis.enhanced_analysis 
+      : "Enhanced analysis unavailable";
+
+    console.log("Rendering overview:", overviewText.substring(0, 100));
+    console.log("Rendering enhanced:", enhancedText.substring(0, 100));
 
     const crisis = analysis.crisis_mode || {};
     const recommended = analysis.recommended_action || "verify";
@@ -211,7 +223,7 @@ analyzeBtn.addEventListener("click", async () => {
       : "";
 
     transcriptEl.textContent =
-      `SUMMARY:\n${analysis.summary}\n\n` +
+      `SUMMARY:\n${overviewText}\n\n` +
       (analysis.selected_text ? `SELECTED TEXT:\n${analysis.selected_text}\n\n` : "") +
       `CRISIS MODE: ${crisis.is_crisis ? "ON" : "OFF"} (${crisis.category || "none"})\n` +
       `WHY: ${crisis.why || "—"}\n\n` +
@@ -223,7 +235,7 @@ analyzeBtn.addEventListener("click", async () => {
     // Render Enhanced Analysis (plain text, API-based AI detection)
     const enhancedAnalysisEl = document.getElementById("enhancedAnalysis");
     if (enhancedAnalysisEl) {
-      enhancedAnalysisEl.textContent = analysis.enhanced_analysis || "Enhanced analysis unavailable";
+      enhancedAnalysisEl.textContent = enhancedText;
     }
 
     setStatus("Done.");

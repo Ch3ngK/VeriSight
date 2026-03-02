@@ -190,6 +190,10 @@ export async function POST(req: Request) {
     const transcript = ((body.transcript || "") as string).slice(0, 12000);
     const selectedText = ((body.selectedText || "") as string).slice(0, 5000);
 
+    // Log incoming request for debugging
+    console.log("ANALYZE REQ KEYS:", Object.keys(body || {}));
+    console.log("ANALYZE REQ - Title:", title, "URL:", url, "Transcript length:", transcript.length);
+
 
     // We won’t send huge images; just tell AI how many frames exist (MVP)
     const frameCount = Array.isArray(body.frames) ? body.frames.length : 0;
@@ -546,16 +550,26 @@ FACT-CHECK SNIPPETS: ${detectionContext.fact_check_snippets.join(" || ") || "Non
     `.trim();
 
     // Call AI detector and capture result (with graceful fallback)
-    const enhancedAnalysis = await checkAIGeneratedText(detectorInput);
+    let enhancedAnalysis = "Enhanced analysis unavailable";
+    try {
+      enhancedAnalysis = await checkAIGeneratedText(detectorInput);
+      if (!enhancedAnalysis || typeof enhancedAnalysis !== "string") {
+        enhancedAnalysis = "Enhanced analysis unavailable";
+      }
+    } catch (eaErr) {
+      console.error("Enhanced analysis failed:", eaErr);
+      enhancedAnalysis = "Enhanced analysis unavailable";
+    }
 
-    // Return both overview (original analysis) and enhanced_analysis (AI detection result)
-    return NextResponse.json(
-      {
-        overview: response.summary || "No overview available",
-        enhanced_analysis: enhancedAnalysis || "Detection unavailable"
-      },
-      { headers: corsHeaders }
-    );
+    // Add enhanced_analysis to the full response object
+    response.enhanced_analysis = enhancedAnalysis;
+
+    // Log for debugging
+    console.log("OVERVIEW RESULT:", response.summary);
+    console.log("ENHANCED ANALYSIS RESULT:", enhancedAnalysis);
+
+    // Return the complete response object with all analysis data + enhanced_analysis
+    return NextResponse.json(response, { headers: corsHeaders });
   } catch (err: any) {
     console.error("[Analyze] Handler error:", err);
     return NextResponse.json(
