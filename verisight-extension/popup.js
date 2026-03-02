@@ -1,12 +1,39 @@
+
 const analyzeBtn = document.getElementById("analyzeBtn");
 const statusEl = document.getElementById("status");
 const titleEl = document.getElementById("title");
+const timerEl = document.getElementById("timer");
 const urlEl = document.getElementById("url");
 const transcriptEl = document.getElementById("transcript");
 const loader = document.getElementById("loader");
+// Image upload and URL input removed: analysis now works on any website without them.
 
 function setStatus(msg) {
   statusEl.textContent = msg || "";
+}
+
+function formatMs(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  const tenths = Math.floor((ms % 1000) / 100);
+  return min > 0
+    ? `${min}:${String(sec).padStart(2, "0")}.${tenths}s`
+    : `${sec}.${tenths}s`;
+}
+
+function startTimer() {
+  const start = Date.now();
+  if (timerEl) timerEl.textContent = "Time: 0.0s";
+
+  const id = setInterval(() => {
+    const elapsed = Date.now() - start;
+    if (timerEl) timerEl.textContent = `Time: ${formatMs(elapsed)}`;
+  }, 100);
+
+  return {
+    stop: () => clearInterval(id)
+  };
 }
 
 async function getActiveTab() {
@@ -99,25 +126,23 @@ async function flushPending() {
 /* -------------------------------------------------
    MAIN ANALYZE FLOW
 -------------------------------------------------- */
+
+// Allow analysis on any page, not just YouTube. Generalize logic for all sites.
 analyzeBtn.addEventListener("click", async () => {
   analyzeBtn.disabled = true;
   loader.style.display = "block";
   setStatus("Preparing…");
+  const t = startTimer();
 
   try {
     const tab = await getActiveTab();
     if (!tab?.id || !tab.url) throw new Error("No active tab.");
 
-    // permit analysis on non-YT pages if text is highlighted
+    // Always try to get selected text and page content
     const selResp = await sendMessageWithInjection(tab.id, { type: "VERISIGHT_GET_SELECTION" });
     const pageSelection = safeString(selResp?.selectedText).trim();
 
-    if (!isYouTubeWatchUrl(tab.url) && !pageSelection) {
-      setStatus("Open a YouTube video page first or highlight text on any page.");
-      return;
-    }
-
-    /* ---------- 1. Capture Frames (Optional) ---------- */
+    // Always try to capture frames, but only show status if on YouTube
     let frames = [];
     try {
       setStatus("Capturing frames…");
@@ -127,54 +152,58 @@ analyzeBtn.addEventListener("click", async () => {
         setStatus(`Frames captured via ${frameResult.method}.`);
       }
     } catch (frameErr) {
+      // Not all sites support frame capture; continue without frames
       console.warn("Frame capture unavailable:", frameErr);
-      // Continue without frames
     }
 
-    /* ---------- 2. Extract Transcript ---------- */
-    setStatus("Extracting transcript…");
-
-    const resp = await sendMessageWithInjection(tab.id, {
-      type: "VERISIGHT_ANALYZE"
-    });
-
-    const title = safeString(resp?.title);
-    const url = safeString(resp?.url);
+    // Always try to extract transcript and metadata
+    setStatus("Extracting page content…");
+    const resp = await sendMessageWithInjection(tab.id, { type: "VERISIGHT_ANALYZE" });
+    const title = safeString(resp?.title) || document.title || "Untitled";
+    const url = safeString(resp?.url) || tab.url;
     const transcript = safeString(resp?.transcript).trim();
-    const selectedText = safeString(resp?.selectedText).trim();
+    const selectedText = safeString(resp?.selectedText).trim() || pageSelection;
 
     // update UI early
     const selectedElInit = document.getElementById("selectedText");
     if (selectedElInit) selectedElInit.textContent = selectedText || "—";
-
     titleEl.textContent = title || "—";
     urlEl.textContent = url || "—";
 
-    /* ---------- 3. Send To Backend ---------- */
+    // Image upload and URL input removed: analysis now works on any website without them.
+    // Send to backend
     setStatus("Running AI analysis…");
-
-    const payload = { title, url, transcript, frames, selectedText: safeString(resp?.selectedText) };
+    const payload = { title, url, transcript, frames, selectedText };
 
     let analysis;
-
     try {
       const res = await fetch("http://127.0.0.1:3000/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-
       if (!res.ok) throw new Error("Backend error");
       analysis = await res.json();
-
+      console.log("API RESPONSE:", analysis);
       await flushPending();
     } catch {
-      // Store for later if backend offline
       await savePending(payload);
       throw new Error("Offline — stored for later sync.");
     }
 
-    /* ---------- 4. Render Results ---------- */
+
+    /* ---------- 5. Render Results ---------- */
+
+    // Safe extraction of key fields with validation
+    const overviewText = typeof analysis.summary === "string" && analysis.summary.trim() 
+      ? analysis.summary 
+      : "Overview unavailable";
+    const enhancedText = typeof analysis.enhanced_analysis === "string" && analysis.enhanced_analysis.trim() 
+      ? analysis.enhanced_analysis 
+      : "Enhanced analysis unavailable";
+
+    console.log("Rendering overview:", overviewText.substring(0, 100));
+    console.log("Rendering enhanced:", enhancedText.substring(0, 100));
 
     const crisis = analysis.crisis_mode || {};
     const recommended = analysis.recommended_action || "verify";
@@ -194,7 +223,7 @@ analyzeBtn.addEventListener("click", async () => {
       : "";
 
     transcriptEl.textContent =
-      `SUMMARY:\n${analysis.summary}\n\n` +
+      `SUMMARY:\n${overviewText}\n\n` +
       (analysis.selected_text ? `SELECTED TEXT:\n${analysis.selected_text}\n\n` : "") +
       `CRISIS MODE: ${crisis.is_crisis ? "ON" : "OFF"} (${crisis.category || "none"})\n` +
       `WHY: ${crisis.why || "—"}\n\n` +
@@ -203,115 +232,17 @@ analyzeBtn.addEventListener("click", async () => {
       `CLAIMS:\n${claimsText}\n\n` +
       `SAFETY NOTES:\n${(analysis.public_safety_notes || []).join("\n")}`;
 
-    // Render enhanced analysis data
-    const enhancedEl = document.getElementById("enhancedContent");
-    if (enhancedEl) {
-      enhancedEl.style.display = "block";
-
-      // Frame analysis
-      const frameAnalysisEl = document.getElementById("frameAnalysis");
-      if (frameAnalysisEl && analysis.frame_analysis) {
-        const fa = analysis.frame_analysis;
-        frameAnalysisEl.textContent =
-          `Frames: ${fa.frames_analyzed}\n` +
-          `Motion: ${fa.motion_detected ? "Detected" : "None"}\n` +
-          `Quality: ${fa.average_quality}\n` +
-          `Signals: ${fa.visual_signals.join(", ") || "None"}`;
-      }
-
-      // Emergency data
-      const emergencyEl = document.getElementById("emergencyData");
-      if (emergencyEl && analysis.emergency_data_validation) {
-        const ed = analysis.emergency_data_validation;
-        emergencyEl.textContent =
-          `Datasets: ${ed.emergency_datasets_available}\n` +
-          `Confidence: ${(ed.contextual_confidence_boost * 100).toFixed(0)}%\n` +
-          (ed.matching_incident_patterns?.map(m => `  • ${m.source}: ${m.incidentCount} incidents`).join("\n") || "");
-      }
-
-      // Environmental data
-      const envEl = document.getElementById("environmentalData");
-      if (envEl && analysis.environmental_validation) {
-        const ev = analysis.environmental_validation;
-        envEl.textContent =
-          `Weather Alerts: ${ev.weather_alerts_count}\n` +
-          `Satellites: ${ev.satellite_anomalies_count}\n` +
-          `Confidence: ${(ev.disaster_pattern_confidence * 100).toFixed(0)}%\n` +
-          (ev.weather_alerts?.map(w => `  • ${w.type}`).join("\n") || "");
-      }
-
-      // Geo context
-      const geoEl = document.getElementById("geoData");
-      if (geoEl && analysis.geolocation_context) {
-        const gc = analysis.geolocation_context;
-        geoEl.textContent =
-          `Location: ${gc.extracted_location || "Unknown"}\n` +
-          `Confidence: ${(gc.location_confidence * 100).toFixed(0)}%\n` +
-          `Facilities: ${gc.nearby_emergency_facilities?.length || 0}\n` +
-          (gc.nearby_emergency_facilities?.map(f => `  • ${f.type}: ${f.distance}km`).join("\n") || "");
-      }
-
-      // Offline capabilities
-      const offlineEl = document.getElementById("offlineData");
-      if (offlineEl && analysis.offline_capabilities) {
-        const oc = analysis.offline_capabilities;
-        offlineEl.textContent =
-          `SMS Alerts: ${oc.sms_alerts_enabled ? "Enabled" : "Disabled"}\n` +
-          `Pending: ${oc.pending_sms_count}\n` +
-          `Message: ${oc.sms_message_template}`;
-      }
-
-      // AI-generated text detection
-      const aiDetectionEl = document.getElementById("aiDetection");
-      if (aiDetectionEl && analysis.ai_detection) {
-        const ad = analysis.ai_detection;
-        aiDetectionEl.textContent =
-          `Probability: ${(ad.ai_probability * 100).toFixed(0)}%\n` +
-          `Conclusion: ${ad.conclusion}\n` +
-          `Sentence Variety: ${(ad.indicators?.sentence_variety * 100).toFixed(0) || 0}%\n` +
-          `Grammar Perfection: ${(ad.indicators?.grammar_perfection * 100).toFixed(0) || 0}%\n` +
-          (ad.warnings?.length > 0 ? `Warnings: ${ad.warnings.join(", ")}` : "");
-      }
-
-      // Deepfake detection
-      const deepfakeEl = document.getElementById("deepfakeDetection");
-      if (deepfakeEl && analysis.deepfake_detection) {
-        const dd = analysis.deepfake_detection;
-        deepfakeEl.textContent =
-          `Probability: ${(dd.deepfake_probability * 100).toFixed(0)}%\n` +
-          `Conclusion: ${dd.conclusion}\n` +
-          `Facial Inconsistencies: ${dd.artifacts?.facial_inconsistencies ? "Detected" : "None"}\n` +
-          `Lighting Issues: ${dd.artifacts?.lighting_anomalies ? "Found" : "None"}\n` +
-          (dd.warnings?.length > 0 ? `Warnings: ${dd.warnings.join(", ")}` : "");
-      }
-
-      // Fact-check verification
-      const factCheckEl = document.getElementById("factCheck");
-      if (factCheckEl && analysis.fact_check) {
-        const fc = analysis.fact_check;
-        factCheckEl.textContent =
-          `Claims Analyzed: ${fc.claims_analyzed}\n` +
-          `Verified: ${fc.verified_count} | False: ${fc.false_count} | Unverified: ${fc.unverified_count}\n` +
-          `Credibility Score: ${(fc.credibility_score * 100).toFixed(0)}%\n` +
-          (fc.fact_checks?.length > 0 ? `Sources: ${fc.fact_checks.map(f => f.source).join(", ")}` : "");
-      }
-
-      // Reverse image search
-      const reverseImageEl = document.getElementById("reverseImageSearch");
-      if (reverseImageEl && analysis.reverse_image_search) {
-        const ris = analysis.reverse_image_search;
-        reverseImageEl.textContent =
-          `Primary Conclusion: ${ris.primary_conclusion}\n` +
-          `Matches Found: ${ris.matches?.length || 0}\n` +
-          `Timestamp Inconsistencies: ${ris.timestamp_inconsistencies?.length || 0}\n` +
-          (ris.matches?.length > 0 ? `Sources: ${ris.matches.map(m => m.source).join(", ")}` : "");
-      }
+    // Render Enhanced Analysis (plain text, API-based AI detection)
+    const enhancedAnalysisEl = document.getElementById("enhancedAnalysis");
+    if (enhancedAnalysisEl) {
+      enhancedAnalysisEl.textContent = enhancedText;
     }
 
     setStatus("Done.");
   } catch (err) {
     setStatus(`Error: ${err.message}`);
   } finally {
+    t.stop();
     loader.style.display = "none";
     analyzeBtn.disabled = false;
   }
