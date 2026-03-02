@@ -118,3 +118,8 @@ useEffect(() => {
     </div>
   );
 }
+
+async function loadStats() {
+  const res = await fetch("/api/stats", { cache: "no-store" });
+  return await res.json();
+}
