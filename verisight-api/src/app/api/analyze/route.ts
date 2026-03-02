@@ -10,6 +10,8 @@ import { enrichWithAIDetection } from "../../../lib/aiTextDetection";
 import { enrichWithDeepfakeDetection } from "../../../lib/deepfakeDetection";
 import { enrichWithFactChecking } from "../../../lib/factCheckIntegration";
 import { enrichWithReverseImageSearch } from "../../../lib/reverseImageSearch";
+import { analyzeImageWithOpenAI } from "../../../lib/openaiVision"; // Added for OpenAI vision
+import axios from "axios"; // For fetching image URLs
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -97,15 +99,93 @@ export async function POST(req: Request) {
   const start = Date.now();
 
   try {
-    const body = await req.json();
+
+    // Accept JSON or multipart (for image upload)
+    let body: any;
+    let imageBase64: string | undefined;
+    let imageUrl: string | undefined;
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      body = await req.json();
+      imageBase64 = body.imageBase64; // Accept base64 image in JSON
+      imageUrl = body.imageUrl; // Accept image URL in JSON
+    } else if (contentType.includes("multipart/form-data")) {
+      const form = await req.formData();
+      body = {};
+      for (const [key, value] of form.entries()) {
+        if (typeof value === "string") {
+          body[key] = value;
+        } else if (value instanceof File) {
+          // Read file as base64
+          const arrayBuffer = await value.arrayBuffer();
+          imageBase64 = Buffer.from(arrayBuffer).toString("base64");
+        }
+      }
+      if (form.has("imageUrl")) imageUrl = form.get("imageUrl") as string;
+    } else {
+      body = await req.json();
+      imageBase64 = body.imageBase64;
+      imageUrl = body.imageUrl;
+    }
+
 
     const title = (body.title || "Untitled") as string;
     const url = (body.url || "") as string;
     const transcript = ((body.transcript || "") as string).slice(0, 12000);
     const selectedText = ((body.selectedText || "") as string).slice(0, 5000);
 
+
     // We won’t send huge images; just tell AI how many frames exist (MVP)
     const frameCount = Array.isArray(body.frames) ? body.frames.length : 0;
+
+    // --- IMAGE ANALYSIS (NEW, supports base64 or URL) ---
+    let imageAnalysis = null;
+    let usedImageBase64 = imageBase64;
+    // Always ensure base64 is a data URL for OpenAI
+    if (usedImageBase64 && !usedImageBase64.startsWith("data:")) {
+      usedImageBase64 = `data:image/jpeg;base64,${usedImageBase64}`;
+    }
+    if (!usedImageBase64 && imageUrl) {
+      // Fetch image from URL and convert to base64
+      try {
+        const imgResp = await axios.get(imageUrl, { responseType: "arraybuffer" });
+        const contentType = imgResp.headers["content-type"] || "image/jpeg";
+        usedImageBase64 = Buffer.from(imgResp.data, "binary").toString("base64");
+        usedImageBase64 = `data:${contentType};base64,${usedImageBase64}`;
+      } catch (e) {
+        imageAnalysis = { error: "Failed to fetch image from URL", details: e?.message || e?.toString() };
+      }
+    }
+    if (usedImageBase64) {
+      try {
+        // For image analysis, use plain English output (not JSON)
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const imgPrompt = "You are VeriSight. You analyze images for public safety, media integrity, and misinformation risk. Respond in clear English sentences suitable for display to end users. Do not use JSON.";
+        const imgMessages = [
+          { role: "system", content: imgPrompt },
+          { role: "user", content: [
+            { type: "image_url", image_url: { url: usedImageBase64 } }
+          ] }
+        ];
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4.1",
+          temperature: 0.2,
+          messages: imgMessages
+        });
+        imageAnalysis = completion.choices[0].message.content;
+      } catch (e) {
+        // Log error but do not break text analysis
+        console.error("Image analysis failed", e);
+        imageAnalysis = { error: "Image analysis failed", details: e?.message || e?.toString() };
+      }
+    }
+
+    // --- Unify image and video analysis logic ---
+    // If only image is provided (no transcript/frames), run enhancements with image context
+    if (!transcript && !Array.isArray(body.frames) && imageAnalysis) {
+      // Optionally, pass imageAnalysis fields to enhancement modules if needed
+      // For now, just include imageAnalysis in response and run default enhancements
+    }
 
     const userPrompt = `
   TITLE: ${title}
@@ -158,6 +238,7 @@ export async function POST(req: Request) {
   }
   `;
 
+    // --- TEXT ANALYSIS (existing) ---
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,
@@ -172,8 +253,10 @@ export async function POST(req: Request) {
       ]
     });
 
+
     const content = completion.choices[0].message.content!;
     const parsed: any = JSON.parse(content);
+
 
     // Fallbacks / sanitization (so UI won’t break)
     const rb = ruleBasedCrisis(title, transcript, selectedText);
@@ -279,6 +362,12 @@ export async function POST(req: Request) {
       location_confidence: 0,
       nearby_emergency_facilities: [],
     };
+
+    // --- Merge image analysis if present (NEW) ---
+    if (imageAnalysis) {
+      // If image analysis is present, return it as plain English in the analysis field
+      return NextResponse.json({ analysis: imageAnalysis }, { headers: corsHeaders });
+    }
 
     /* ----- RUN ALL ENHANCEMENTS IN PARALLEL FOR SPEED ----- */
     const enhancementPromises: Promise<any>[] = [];
