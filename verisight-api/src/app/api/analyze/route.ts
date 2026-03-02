@@ -95,6 +95,62 @@ function safeCategory(x: any): CrisisCategory {
   return allowed.includes(x) ? x : "other";
 }
 
+/**
+ * Fetch fact-check snippets from a search API (e.g., Bing)
+ * Returns 2-3 short snippets or [] on failure/timeout
+ * Enhanced Analysis uses external API data to strengthen fact-checking
+ */
+async function fetchFactCheckSnippets(claim: string): Promise<string[]> {
+  try {
+    // Use Bing Search API if configured
+    const bingKey = process.env.BING_SEARCH_API_KEY;
+    if (!bingKey) return [];
+
+    const searchUrl = `https://api.bing.microsoft.com/v7.0/search?q=${encodeURIComponent(claim)}&count=3`;
+    const response = await Promise.race([
+      axios.get(searchUrl, {
+        headers: { "Ocp-Apim-Subscription-Key": bingKey },
+        timeout: 3000
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500))
+    ]);
+
+    const results = (response as any).data?.webPages?.value || [];
+    return results.slice(0, 3).map((r: any) => r.snippet || "").filter((s: string) => s.length > 0);
+  } catch (err) {
+    console.warn("[FactCheckSnippets] Failed:", err instanceof Error ? err.message : "unknown");
+    return [];
+  }
+}
+
+/**
+ * Check if input text appears AI-generated using GPT model
+ * Sends readable text payload (not raw JSON) including transcript, metadata, claims, signals, fact_check_snippets
+ * Returns plain English string; "Detection unavailable" on error
+ */
+async function checkAIGeneratedText(inputText: string): Promise<string> {
+  try {
+    const systemPrompt = `You are VeriSight Detector. Using the provided transcript, metadata, claims, signals, and fact-check snippets, determine whether the text appears AI-generated. Look for unnatural phrasing, repetition, overuse of qualifiers, improbable factual density, mismatch with cited sources, and any deepfake-related claims. Respond in 3–5 plain English sentences: a short verdict (Likely AI generated / Possibly AI generated / Likely human), the top 2 indicators found, and a confidence estimate (low/medium/high).`;
+
+    const completion = await Promise.race([
+      client.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: inputText }
+        ]
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000)) as any
+    ]);
+
+    return (completion as any).choices[0]?.message?.content || "Detection unavailable";
+  } catch (err) {
+    console.error("[AIDetector] Error:", err instanceof Error ? err.message : "unknown");
+    return "Detection unavailable";
+  }
+}
+
 export async function POST(req: Request) {
   const start = Date.now();
 
@@ -133,6 +189,10 @@ export async function POST(req: Request) {
     const url = (body.url || "") as string;
     const transcript = ((body.transcript || "") as string).slice(0, 12000);
     const selectedText = ((body.selectedText || "") as string).slice(0, 5000);
+
+    // Log incoming request for debugging
+    console.log("ANALYZE REQ KEYS:", Object.keys(body || {}));
+    console.log("ANALYZE REQ - Title:", title, "URL:", url, "Transcript length:", transcript.length);
 
 
     // We won’t send huge images; just tell AI how many frames exist (MVP)
@@ -453,10 +513,67 @@ export async function POST(req: Request) {
       }
     }
 
+    // --- ENHANCED ANALYSIS: API-Based AI Text Detection ---
+    // Build a safe context object with fallbacks to prevent NaN/0/empty outputs
+    const extractedClaims = Array.isArray(parsed?.claims) ? parsed.claims.map((c: any) => c.claim || "") : [];
+    const detectedSignals = Array.isArray(parsed?.signals) ? parsed.signals.map((s: any) => s.label || "") : [];
+
+    // Fetch fact-check snippets for extracted claims (parallel requests with fallback to empty array)
+    const factCheckSnippetsByclaim = await Promise.all(
+      extractedClaims.slice(0, 3).map((claim: string) => fetchFactCheckSnippets(claim))
+    );
+    const flattenedSnippets = factCheckSnippetsByclaim.flat();
+
+    // Build context object with sensible fallbacks
+    const detectionContext = {
+      transcript: transcript || "No transcript available",
+      metadata: {
+        title: title || "Unknown title",
+        url: url || "Unknown URL",
+        published: (body.publishDate as string) || "Unknown date"
+      },
+      claims: extractedClaims.length > 0 ? extractedClaims : ["No claims detected"],
+      signals: detectedSignals.length > 0 ? detectedSignals : ["No signals detected"],
+      fact_check_snippets: flattenedSnippets.length > 0 ? flattenedSnippets : []
+    };
+
+    // Format context as readable text (not raw JSON) for the detector
+    const detectorInput = `
+TRANSCRIPT: ${detectionContext.transcript}
+METADATA:
+  - Title: ${detectionContext.metadata.title}
+  - URL: ${detectionContext.metadata.url}
+  - Published: ${detectionContext.metadata.published}
+CLAIMS: ${detectionContext.claims.join("; ")}
+SIGNALS: ${detectionContext.signals.join("; ")}
+FACT-CHECK SNIPPETS: ${detectionContext.fact_check_snippets.join(" || ") || "None found"}
+    `.trim();
+
+    // Call AI detector and capture result (with graceful fallback)
+    let enhancedAnalysis = "Enhanced analysis unavailable";
+    try {
+      enhancedAnalysis = await checkAIGeneratedText(detectorInput);
+      if (!enhancedAnalysis || typeof enhancedAnalysis !== "string") {
+        enhancedAnalysis = "Enhanced analysis unavailable";
+      }
+    } catch (eaErr) {
+      console.error("Enhanced analysis failed:", eaErr);
+      enhancedAnalysis = "Enhanced analysis unavailable";
+    }
+
+    // Add enhanced_analysis to the full response object
+    response.enhanced_analysis = enhancedAnalysis;
+
+    // Log for debugging
+    console.log("OVERVIEW RESULT:", response.summary);
+    console.log("ENHANCED ANALYSIS RESULT:", enhancedAnalysis);
+
+    // Return the complete response object with all analysis data + enhanced_analysis
     return NextResponse.json(response, { headers: corsHeaders });
   } catch (err: any) {
+    console.error("[Analyze] Handler error:", err);
     return NextResponse.json(
-      { error: err.message || "AI failed" },
+      { error: err.message || "AI analysis failed", overview: "Error during analysis", enhanced_analysis: "Detection unavailable" },
       { status: 500, headers: corsHeaders }
     );
   }

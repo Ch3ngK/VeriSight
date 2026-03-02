@@ -184,6 +184,7 @@ analyzeBtn.addEventListener("click", async () => {
       });
       if (!res.ok) throw new Error("Backend error");
       analysis = await res.json();
+      console.log("API RESPONSE:", analysis);
       await flushPending();
     } catch {
       await savePending(payload);
@@ -192,6 +193,17 @@ analyzeBtn.addEventListener("click", async () => {
 
 
     /* ---------- 5. Render Results ---------- */
+
+    // Safe extraction of key fields with validation
+    const overviewText = typeof analysis.summary === "string" && analysis.summary.trim() 
+      ? analysis.summary 
+      : "Overview unavailable";
+    const enhancedText = typeof analysis.enhanced_analysis === "string" && analysis.enhanced_analysis.trim() 
+      ? analysis.enhanced_analysis 
+      : "Enhanced analysis unavailable";
+
+    console.log("Rendering overview:", overviewText.substring(0, 100));
+    console.log("Rendering enhanced:", enhancedText.substring(0, 100));
 
     const crisis = analysis.crisis_mode || {};
     const recommended = analysis.recommended_action || "verify";
@@ -211,7 +223,7 @@ analyzeBtn.addEventListener("click", async () => {
       : "";
 
     transcriptEl.textContent =
-      `SUMMARY:\n${analysis.summary}\n\n` +
+      `SUMMARY:\n${overviewText}\n\n` +
       (analysis.selected_text ? `SELECTED TEXT:\n${analysis.selected_text}\n\n` : "") +
       `CRISIS MODE: ${crisis.is_crisis ? "ON" : "OFF"} (${crisis.category || "none"})\n` +
       `WHY: ${crisis.why || "—"}\n\n` +
@@ -220,111 +232,10 @@ analyzeBtn.addEventListener("click", async () => {
       `CLAIMS:\n${claimsText}\n\n` +
       `SAFETY NOTES:\n${(analysis.public_safety_notes || []).join("\n")}`;
 
-    // Render enhanced analysis data
-    const enhancedEl = document.getElementById("enhancedContent");
-    if (enhancedEl) {
-      enhancedEl.style.display = "block";
-
-      // Image Analysis section removed: all results now shown in Overview.
-
-      // Frame analysis
-      const frameAnalysisEl = document.getElementById("frameAnalysis");
-      if (frameAnalysisEl && analysis.frame_analysis) {
-        const fa = analysis.frame_analysis;
-        frameAnalysisEl.textContent =
-          `Frames: ${fa.frames_analyzed}\n` +
-          `Motion: ${fa.motion_detected ? "Detected" : "None"}\n` +
-          `Quality: ${fa.average_quality}\n` +
-          `Signals: ${fa.visual_signals.join(", ") || "None"}`;
-      }
-
-      // Emergency data
-      const emergencyEl = document.getElementById("emergencyData");
-      if (emergencyEl && analysis.emergency_data_validation) {
-        const ed = analysis.emergency_data_validation;
-        emergencyEl.textContent =
-          `Datasets: ${ed.emergency_datasets_available}\n` +
-          `Confidence: ${(ed.contextual_confidence_boost * 100).toFixed(0)}%\n` +
-          (ed.matching_incident_patterns?.map(m => `  • ${m.source}: ${m.incidentCount} incidents`).join("\n") || "");
-      }
-
-      // Environmental data
-      const envEl = document.getElementById("environmentalData");
-      if (envEl && analysis.environmental_validation) {
-        const ev = analysis.environmental_validation;
-        envEl.textContent =
-          `Weather Alerts: ${ev.weather_alerts_count}\n` +
-          `Satellites: ${ev.satellite_anomalies_count}\n` +
-          `Confidence: ${(ev.disaster_pattern_confidence * 100).toFixed(0)}%\n` +
-          (ev.weather_alerts?.map(w => `  • ${w.type}`).join("\n") || "");
-      }
-
-      // Geo context
-      const geoEl = document.getElementById("geoData");
-      if (geoEl && analysis.geolocation_context) {
-        const gc = analysis.geolocation_context;
-        geoEl.textContent =
-          `Location: ${gc.extracted_location || "Unknown"}\n` +
-          `Confidence: ${(gc.location_confidence * 100).toFixed(0)}%\n` +
-          `Facilities: ${gc.nearby_emergency_facilities?.length || 0}\n` +
-          (gc.nearby_emergency_facilities?.map(f => `  • ${f.type}: ${f.distance}km`).join("\n") || "");
-      }
-
-      // Offline capabilities
-      const offlineEl = document.getElementById("offlineData");
-      if (offlineEl && analysis.offline_capabilities) {
-        const oc = analysis.offline_capabilities;
-        offlineEl.textContent =
-          `SMS Alerts: ${oc.sms_alerts_enabled ? "Enabled" : "Disabled"}\n` +
-          `Pending: ${oc.pending_sms_count}\n` +
-          `Message: ${oc.sms_message_template}`;
-      }
-
-      // AI-generated text detection
-      const aiDetectionEl = document.getElementById("aiDetection");
-      if (aiDetectionEl && analysis.ai_detection) {
-        const ad = analysis.ai_detection;
-        aiDetectionEl.textContent =
-          `Probability: ${(ad.ai_probability * 100).toFixed(0)}%\n` +
-          `Conclusion: ${ad.conclusion}\n` +
-          `Sentence Variety: ${(ad.indicators?.sentence_variety * 100).toFixed(0) || 0}%\n` +
-          `Grammar Perfection: ${(ad.indicators?.grammar_perfection * 100).toFixed(0) || 0}%\n` +
-          (ad.warnings?.length > 0 ? `Warnings: ${ad.warnings.join(", ")}` : "");
-      }
-
-      // Deepfake detection
-      const deepfakeEl = document.getElementById("deepfakeDetection");
-      if (deepfakeEl && analysis.deepfake_detection) {
-        const dd = analysis.deepfake_detection;
-        deepfakeEl.textContent =
-          `Probability: ${(dd.deepfake_probability * 100).toFixed(0)}%\n` +
-          `Conclusion: ${dd.conclusion}\n` +
-          `Facial Inconsistencies: ${dd.artifacts?.facial_inconsistencies ? "Detected" : "None"}\n` +
-          `Lighting Issues: ${dd.artifacts?.lighting_anomalies ? "Found" : "None"}\n` +
-          (dd.warnings?.length > 0 ? `Warnings: ${dd.warnings.join(", ")}` : "");
-      }
-
-      // Fact-check verification
-      const factCheckEl = document.getElementById("factCheck");
-      if (factCheckEl && analysis.fact_check) {
-        const fc = analysis.fact_check;
-        factCheckEl.textContent =
-          `Claims Analyzed: ${fc.claims_analyzed}\n` +
-          `Verified: ${fc.verified_count} | False: ${fc.false_count} | Unverified: ${fc.unverified_count}\n` +
-          `Credibility Score: ${(fc.credibility_score * 100).toFixed(0)}%\n` +
-          (fc.fact_checks?.length > 0 ? `Sources: ${fc.fact_checks.map(f => f.source).join(", ")}` : "");
-      }
-
-      // Reverse image search
-      const reverseImageEl = document.getElementById("reverseImageSearch");
-      if (reverseImageEl && analysis.reverse_image_search) {
-        const ris = analysis.reverse_image_search;
-        reverseImageEl.textContent =
-          `Primary Conclusion: ${ris.primary_conclusion}\n` +
-          `Matches Found: ${ris.matches?.length || 0}\n` +
-          `Timestamp Inconsistencies: ${ris.timestamp_inconsistencies?.length || 0}\n` +
-          (ris.matches?.length > 0 ? `Sources: ${ris.matches.map(m => m.source).join(", ")}` : "");
-      }
+    // Render Enhanced Analysis (plain text, API-based AI detection)
+    const enhancedAnalysisEl = document.getElementById("enhancedAnalysis");
+    if (enhancedAnalysisEl) {
+      enhancedAnalysisEl.textContent = enhancedText;
     }
 
     setStatus("Done.");
