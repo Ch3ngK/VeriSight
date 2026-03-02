@@ -25,14 +25,22 @@ function getTranscriptIfOpen() {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg?.type !== "VERISIGHT_ANALYZE") return;
-
-    const result = {
-        url: location.href,
-        title: getTitle(),
-        transcript: getTranscriptIfOpen()
-    };
-
-    sendResponse(result);
+    if (msg?.type === "VERISIGHT_ANALYZE") {
+        const result = {
+            url: location.href,
+            title: getTitle(),
+            transcript: getTranscriptIfOpen(),
+            selectedText: window.getSelection().toString().trim() || ""
+        };
+        sendResponse(result);
+    } else if (msg?.type === "VERISIGHT_CAPTURE_FRAMES_PLAN_A") {
+        // Frame capture not implemented in content script (Plan A)
+        sendResponse({ ok: false, method: "plan-a" });
+    } else if (msg?.type === "VERISIGHT_GET_SELECTION") {
+        sendResponse({ selectedText: window.getSelection().toString().trim() });
+    } else {
+        // Unknown message type
+        sendResponse({ ok: false });
+    }
     return true; // keep channel open if needed
 });

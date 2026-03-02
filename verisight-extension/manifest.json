@@ -5,7 +5,8 @@
     "description": "Credibility signals + claim extraction for YouTube videos.",
     "permissions": [
         "activeTab",
-        "scripting"
+        "scripting",
+        "storage"
     ],
     "host_permissions": [
         "https://www.youtube.com/*"

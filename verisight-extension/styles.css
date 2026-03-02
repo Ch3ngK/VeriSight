@@ -92,3 +92,45 @@ button:disabled {
     white-space: pre-wrap;
     font-size: 12px;
 }
+
+.loader {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin: 10px 0;
+    border: 2px solid #223044;
+    border-top-color: #2f81f7;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.subsection {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #223044;
+}
+
+.subsection h4 {
+    margin: 0 0 6px 0;
+    font-size: 12px;
+    color: #79c0ff;
+}
+
+.detail-text {
+    max-height: 120px;
+    overflow: auto;
+    padding: 6px;
+    border-radius: 8px;
+    background: #0b0f14;
+    border: 1px solid #223044;
+    white-space: pre-wrap;
+    font-size: 11px;
+    margin: 0;
+    word-wrap: break-word;
+}

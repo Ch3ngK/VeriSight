@@ -14,8 +14,9 @@
     </header>
 
     <main>
-        <button id="analyzeBtn">Analyze this video</button>
+        <button id="analyzeBtn">Analyze</button>
 
+        <div id="loader" class="loader" style="display: none;"></div>
         <div id="status" class="status"></div>
 
         <section class="card">
@@ -25,11 +26,60 @@
         </section>
 
         <section class="card">
+            <h3>Selected Text (highlight something on the page first)</h3>
+            <div class="hint">
+                Highlight text anywhere on the page before clicking Analyze.
+            </div>
+            <pre id="selectedText" class="transcript">—</pre>
+        </section>
+        <section class="card">
             <h3>Transcript (if available)</h3>
             <div class="hint">
                 Tip: On YouTube, open transcript first (⋯ → <b>Show transcript</b>), then click Analyze.
             </div>
             <pre id="transcript" class="transcript">—</pre>
+        </section>
+
+        <section class="card">
+            <h3>Enhanced Analysis</h3>
+            <div id="enhancedContent" style="display: none;">
+                <div class="subsection">
+                    <h4>📊 Frame Analysis</h4>
+                    <pre id="frameAnalysis" class="detail-text">—</pre>
+                </div>
+                <div class="subsection">
+                    <h4>🚨 Emergency Data Validation</h4>
+                    <pre id="emergencyData" class="detail-text">—</pre>
+                </div>
+                <div class="subsection">
+                    <h4>🌍 Environmental Signals</h4>
+                    <pre id="environmentalData" class="detail-text">—</pre>
+                </div>
+                <div class="subsection">
+                    <h4>📍 Geolocation Context</h4>
+                    <pre id="geoData" class="detail-text">—</pre>
+                </div>
+                <div class="subsection">
+                    <h4>💬 Offline Capabilities</h4>
+                    <pre id="offlineData" class="detail-text">—</pre>
+                </div>
+                <div class="subsection">
+                    <h4>🤖 AI-Generated Text Detection</h4>
+                    <pre id="aiDetection" class="detail-text">—</pre>
+                </div>
+                <div class="subsection">
+                    <h4>🎬 Deepfake Detection</h4>
+                    <pre id="deepfakeDetection" class="detail-text">—</pre>
+                </div>
+                <div class="subsection">
+                    <h4>✓ Fact-Check Verification</h4>
+                    <pre id="factCheck" class="detail-text">—</pre>
+                </div>
+                <div class="subsection">
+                    <h4>🔍 Reverse Image Search</h4>
+                    <pre id="reverseImageSearch" class="detail-text">—</pre>
+                </div>
+            </div>
         </section>
     </main>
 
