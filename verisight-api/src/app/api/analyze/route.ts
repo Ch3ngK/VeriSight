@@ -216,7 +216,8 @@ export async function POST(req: Request) {
         usedImageBase64 = Buffer.from(imgResp.data, "binary").toString("base64");
         usedImageBase64 = `data:${contentType};base64,${usedImageBase64}`;
       } catch (e) {
-        imageAnalysis = { error: "Failed to fetch image from URL", details: e?.message || e?.toString() };
+        let details = (typeof e === "object" && e && "message" in e) ? (e as any).message : String(e);
+        imageAnalysis = { error: "Failed to fetch image from URL", details };
       }
     }
     if (usedImageBase64) {
@@ -228,7 +229,7 @@ export async function POST(req: Request) {
           { role: "system", content: imgPrompt },
           { role: "user", content: [
             { type: "image_url", image_url: { url: usedImageBase64 } }
-          ] }
+          ] as any } // Cast as any to satisfy type, safe for this context
         ];
         const completion = await openai.chat.completions.create({
           model: "gpt-4.1",
@@ -239,7 +240,8 @@ export async function POST(req: Request) {
       } catch (e) {
         // Log error but do not break text analysis
         console.error("Image analysis failed", e);
-        imageAnalysis = { error: "Image analysis failed", details: e?.message || e?.toString() };
+        let details = (typeof e === "object" && e && "message" in e) ? (e as any).message : String(e);
+        imageAnalysis = { error: "Image analysis failed", details };
       }
     }
 

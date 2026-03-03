@@ -50,71 +50,68 @@ useEffect(() => {
   }
 
   return (
-    <div style={{ border: "1px solid #ddd", padding: 20, borderRadius: 8 }}>
-      <h2>Manual Test</h2>
+    <div className="vs-popup-card">
+      <div className="vs-popup-accent-bar" aria-hidden="true" />
+      <div className="vs-header">
+        <span className="vs-title">Manual Test</span>
+        <span className="vs-chip">CRISIS MODE: OFF</span>
+      </div>
 
-      <input
-        placeholder="Video Title"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        style={{ width: "100%", marginBottom: 10 }}
-      />
+      <div className="vs-section">
+        <div className="vs-section-heading">Overview</div>
+        <div className="vs-card vs-overview vs-empty">Enter a video title and transcript to analyze.</div>
+      </div>
 
-      <textarea
-        placeholder="Paste transcript here..."
-        value={transcript}
-        onChange={(e) => setTranscript(e.target.value)}
-        rows={6}
-        style={{ width: "100%", marginBottom: 10 }}
-      />
-
-      <button onClick={runTest} disabled={loading}>
-        {loading ? "Analyzing..." : "Analyze"}
-      </button>
+      <div className="vs-section">
+        <div className="vs-section-heading">Input</div>
+        <div className="vs-card">
+          <input
+            className="vs-input"
+            placeholder="Video Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            style={{ width: "100%", marginBottom: 10 }}
+          />
+          <textarea
+            className="vs-input"
+            placeholder="Paste transcript here..."
+            value={transcript}
+            onChange={(e) => setTranscript(e.target.value)}
+            rows={6}
+            style={{ width: "100%", marginBottom: 10 }}
+          />
+          <button className="vs-btn" onClick={runTest} disabled={loading}>
+            {loading ? "Analyzing..." : "Analyze"}
+          </button>
+        </div>
+      </div>
 
       {/* AI Result */}
       {result && (
-        <pre
-          style={{
-            marginTop: 20,
-            background: "#111",
-            color: "#0f0",
-            padding: 10,
-            overflow: "auto",
-            fontSize: 12,
-            borderRadius: 6,
-          }}
-        >
-          {JSON.stringify(result, null, 2)}
-        </pre>
-      )}
-
-      {/* Request Logs */}
-      <h3 style={{ marginTop: 30 }}>Recent Requests</h3>
-
-      {logs.length === 0 && (
-        <div style={{ fontSize: 13, color: "#777" }}>No requests yet.</div>
-      )}
-
-      {logs.map((log) => (
-        <div
-          key={log.id}
-          style={{
-            border: "1px solid #ddd",
-            padding: 10,
-            marginTop: 8,
-            borderRadius: 6,
-            fontSize: 13,
-          }}
-        >
-          <div><strong>{log.title}</strong></div>
-          <div>Transcript Length: {log.transcriptLength}</div>
-          <div>Processing Time: {log.durationMs} ms</div>
-          <div>
-            Time: {new Date(log.timestamp).toLocaleTimeString()}
+        <div className="vs-section">
+          <div className="vs-section-heading">AI Result</div>
+          <div className="vs-card" style={{ background: "#111", color: "#0f0", fontSize: 12 }}>
+            <pre style={{ margin: 0, background: "none", color: "inherit", padding: 0, overflow: "auto" }}>
+              {JSON.stringify(result, null, 2)}
+            </pre>
           </div>
         </div>
-      ))}
+      )}
+
+      <div className="vs-section">
+        <div className="vs-section-heading">Recent Requests</div>
+        {logs.length === 0 && (
+          <div className="vs-card" style={{ fontSize: 13, color: "var(--muted-text)", fontStyle: "italic" }}>No requests yet.</div>
+        )}
+        {logs.map((log) => (
+          <div className="vs-card" key={log.id} style={{ fontSize: 13 }}>
+            <div style={{ fontWeight: 500 }}>{log.title}</div>
+            <div>Transcript Length: {log.transcriptLength}</div>
+            <div>Processing Time: {log.durationMs} ms</div>
+            <div>Time: {new Date(log.timestamp).toLocaleTimeString()}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
