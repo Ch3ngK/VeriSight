@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions/completions";
 import { addLog } from "../../../lib/requestLog";
 import { analyzeFrames, enhanceAnalysisWithFrameContext } from "../../../lib/frameEnhancement";
 import { enrichWithEmergencyData } from "../../../lib/emergencyData";
@@ -225,11 +226,15 @@ export async function POST(req: Request) {
         // For image analysis, use plain English output (not JSON)
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         const imgPrompt = "You are VeriSight. You analyze images for public safety, media integrity, and misinformation risk. Respond in clear English sentences suitable for display to end users. Do not use JSON.";
-        const imgMessages = [
+        // Minimal, safe TypeScript fix: use correct message type for OpenAI SDK
+        const imgMessages: ChatCompletionMessageParam[] = [
           { role: "system", content: imgPrompt },
-          { role: "user", content: [
-            { type: "image_url", image_url: { url: usedImageBase64 } }
-          ] as any } // Cast as any to satisfy type, safe for this context
+          {
+            role: "user",
+            content: [
+              { type: "image_url", image_url: { url: usedImageBase64 } }
+            ]
+          }
         ];
         const completion = await openai.chat.completions.create({
           model: "gpt-4.1",

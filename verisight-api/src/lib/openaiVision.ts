@@ -1,6 +1,7 @@
 // openaiVision.ts
 // Helper for OpenAI vision model image analysis
 import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions/completions";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -23,7 +24,7 @@ export async function analyzeImageWithOpenAI(base64Image: string, prompt = "Anal
     imageData = `data:image/jpeg;base64,${base64Image}`;
   }
   // gpt-4.1 expects user message content as array: [{type: "image_url", image_url: {url: ...}}]
-  const messages = [
+  const messages: ChatCompletionMessageParam[] = [
     {
       role: "system",
       content: "You are VeriSight. You analyze images for public safety, media integrity, and misinformation risk. Respond in clear English sentences suitable for display to end users. Do not use JSON."
@@ -45,6 +46,7 @@ export async function analyzeImageWithOpenAI(base64Image: string, prompt = "Anal
   } catch (err) {
     // Log error for debugging, return error for frontend
     console.error("OpenAI image analysis error", err);
-    return `Image analysis failed: ${err?.message || err?.toString()}`;
+    let details = (typeof err === "object" && err && "message" in err) ? (err as any).message : String(err);
+    return `Image analysis failed: ${details}`;
   }
 }

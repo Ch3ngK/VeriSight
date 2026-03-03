@@ -98,7 +98,7 @@ export async function enrichWithStatisticalValidation(analysis: any, text: strin
     }
 
     results.push({
-      metric: c.metric,
+      metric: c.metric as StatResult["metric"],
       country: c.country,
       claimed_value: c.value,
       unit: "%",
